@@ -1,0 +1,136 @@
+// =====================================================================
+//  ASSIGNMENT 1 — NETFLIX USERBASE  |  Power BI data model + DAX
+//  Author: Ansh Rai
+// =====================================================================
+//
+//  DATA MODEL (star schema, all relationships 1 : * , single direction)
+//  ---------------------------------------------------------------
+//   Fact : 'Netflix Userbase'  (2,500 rows)
+//   Dims : Country, Device, Subscription, Gender, 'Date'
+//
+//   Country[ID]                    1 ─── *  'Netflix Userbase'[Country_ID]
+//   Device[Device_ID]              1 ─── *  'Netflix Userbase'[Device]
+//   Subscription[Subscription_ID]  1 ─── *  'Netflix Userbase'[Subscription_ID]
+//   Gender[Gender_ID]              1 ─── *  'Netflix Userbase'[Gender_ID]
+//   'Date'[Date]                   1 ─── *  'Netflix Userbase'[Join Date]
+//
+//  POWER QUERY CLEAN-UP (before loading)
+//   * Device.xlsx      -> remove the duplicate column "Device_ID.1"
+//   * Country.csv / gender.csv -> check "Use First Row as Headers" is applied
+//   * Netflix Userbase -> Join Date & Last Payment Date typed as Date
+//   * Optional: rename 'Netflix Userbase'[Device] to [Device_ID] (it holds the ID)
+// =====================================================================
+
+
+// ---------- 1. DATE TABLE  (Modeling > New table, then "Mark as date table")
+Date =
+ADDCOLUMNS (
+    CALENDAR ( DATE ( 2021, 1, 1 ), DATE ( 2023, 12, 31 ) ),
+    "Year",       YEAR ( [Date] ),
+    "Month No",   MONTH ( [Date] ),
+    "Month",      FORMAT ( [Date], "MMM" ),
+    "Year-Month", FORMAT ( [Date], "YYYY-MM" ),
+    "Quarter",    "Q" & QUARTER ( [Date] )
+)
+// Sort 'Date'[Month] by 'Date'[Month No]
+
+
+// ---------- 2. CALCULATED COLUMNS  (on 'Netflix Userbase')
+
+Tenure Months =
+DATEDIFF ( 'Netflix Userbase'[Join Date], 'Netflix Userbase'[Last Payment Date], MONTH )
+
+Age Group =
+SWITCH (
+    TRUE (),
+    'Netflix Userbase'[Age] < 30, "Under 30",
+    'Netflix Userbase'[Age] < 40, "30-39",
+    'Netflix Userbase'[Age] < 50, "40-49",
+    "50+"
+)
+
+
+// ---------- 3. MEASURES  (put them in 'Netflix Userbase' or a _Measures table)
+
+// Basic aggregations (SUM / COUNT / AVERAGE)
+Total Users = COUNTROWS ( 'Netflix Userbase' )
+
+Total Monthly Revenue = SUM ( 'Netflix Userbase'[Monthly Revenue] )
+
+Avg Revenue per User =
+DIVIDE ( [Total Monthly Revenue], [Total Users] )
+
+Average Age = AVERAGE ( 'Netflix Userbase'[Age] )
+
+// Iterator functions (SUMX / AVERAGEX)
+Lifetime Revenue =
+SUMX (
+    'Netflix Userbase',
+    'Netflix Userbase'[Monthly Revenue]
+        * ( DATEDIFF ( 'Netflix Userbase'[Join Date], 'Netflix Userbase'[Last Payment Date], MONTH ) + 1 )
+)
+
+Avg Tenure (Months) =
+AVERAGEX (
+    'Netflix Userbase',
+    DATEDIFF ( 'Netflix Userbase'[Join Date], 'Netflix Userbase'[Last Payment Date], MONTH )
+)
+
+// CALCULATE-based
+Female Users = CALCULATE ( [Total Users], Gender[Gender] = "Female" )
+
+Male Users = CALCULATE ( [Total Users], Gender[Gender] = "Male" )
+
+Revenue Share % =
+DIVIDE (
+    [Total Monthly Revenue],
+    CALCULATE ( [Total Monthly Revenue], ALL ( 'Netflix Userbase' ) )
+)
+
+User Share % =
+DIVIDE ( [Total Users], CALCULATE ( [Total Users], ALL ( 'Netflix Userbase' ) ) )
+
+Premium Users = CALCULATE ( [Total Users], Subscription[Subscription Type] = "Premium" )
+
+New Joins = [Total Users]   // use with 'Date' on an axis -> joins per month
+
+
+// =====================================================================
+//  EXPECTED VALUES (no filters) — use these to check your report
+//   Total Users            2,500
+//   Total Monthly Revenue  31,271
+//   Avg Revenue per User   12.51
+//   Average Age            38.8
+//   Lifetime Revenue       350,768
+//   Avg Tenure (Months)    10.22
+//   Female / Male Users    1,257 / 1,243
+//   Users by plan          Basic 999 · Standard 768 · Premium 733
+//   Top revenue country    United States 5,664  (Spain 5,662)
+// =====================================================================
+
+
+// =====================================================================
+//  2-PAGE DASHBOARD LAYOUT
+// =====================================================================
+//  PAGE 1 — "Revenue Overview"
+//   Row 1  Cards: Total Users · Total Monthly Revenue · Avg Revenue per User
+//                 · Lifetime Revenue · Average Age
+//   Row 2  Clustered bar   : Total Monthly Revenue by Country[Country] (sorted desc)
+//          Donut           : Total Users by Subscription[Subscription Type]
+//   Row 3  Column chart    : Total Monthly Revenue by Device[Device]
+//          Table           : Subscription Type | Total Users | Total Monthly Revenue
+//                            | Revenue Share %
+//   Slicers (left pane)    : Country, Gender, Subscription Type
+//
+//  PAGE 2 — "User Insights"
+//   Row 1  Cards: Female Users · Male Users · Avg Tenure (Months) · Premium Users
+//   Row 2  Line chart      : Total Users by 'Date'[Year-Month]  (joins over time)
+//          Stacked column  : Total Users by Age Group, legend = Subscription Type
+//   Row 3  Matrix          : Rows Country, Columns Subscription Type,
+//                            Values Total Monthly Revenue (conditional formatting)
+//          Pie             : Total Users by Gender[Gender]
+//   Slicers                : Device, Age Group
+//
+//  Tips: View > Sync slicers to share Country/Gender across both pages;
+//        add page-navigation buttons (Insert > Buttons > Navigator > Page).
+// =====================================================================

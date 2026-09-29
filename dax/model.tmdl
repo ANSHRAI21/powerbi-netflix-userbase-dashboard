@@ -1,0 +1,305 @@
+createOrReplace
+
+	table 'Netflix Userbase'
+
+		column 'User ID'
+			dataType: int64
+			formatString: 0
+			summarizeBy: none
+			sourceColumn: User ID
+
+		column Subscription_ID
+			dataType: int64
+			formatString: 0
+			summarizeBy: none
+			sourceColumn: Subscription_ID
+
+		column 'Monthly Revenue'
+			dataType: int64
+			formatString: #,0
+			summarizeBy: sum
+			sourceColumn: Monthly Revenue
+
+		column 'Join Date'
+			dataType: dateTime
+			formatString: dd-mm-yyyy
+			summarizeBy: none
+			sourceColumn: Join Date
+
+		column 'Last Payment Date'
+			dataType: dateTime
+			formatString: dd-mm-yyyy
+			summarizeBy: none
+			sourceColumn: Last Payment Date
+
+		column Country_ID
+			dataType: int64
+			formatString: 0
+			summarizeBy: none
+			sourceColumn: Country_ID
+
+		column Age
+			dataType: int64
+			formatString: 0
+			summarizeBy: none
+			sourceColumn: Age
+
+		column Gender_ID
+			dataType: int64
+			formatString: 0
+			summarizeBy: none
+			sourceColumn: Gender_ID
+
+		column Device_ID
+			dataType: int64
+			formatString: 0
+			summarizeBy: none
+			sourceColumn: Device_ID
+
+		column 'Tenure Months' = DATEDIFF ( 'Netflix Userbase'[Join Date], 'Netflix Userbase'[Last Payment Date], MONTH )
+			dataType: int64
+			formatString: 0
+			summarizeBy: none
+
+		column 'Age Group' = ```
+				SWITCH (
+				    TRUE (),
+				    'Netflix Userbase'[Age] < 30, "Under 30",
+				    'Netflix Userbase'[Age] < 40, "30-39",
+				    'Netflix Userbase'[Age] < 50, "40-49",
+				    "50+"
+				)
+				```
+			dataType: string
+			summarizeBy: none
+
+		measure 'Total Users' = COUNTROWS ( 'Netflix Userbase' )
+			formatString: #,0
+
+		measure 'Total Monthly Revenue' = SUM ( 'Netflix Userbase'[Monthly Revenue] )
+			formatString: \$#,0
+
+		measure 'Avg Revenue per User' = DIVIDE ( [Total Monthly Revenue], [Total Users] )
+			formatString: \$#,0.00
+
+		measure 'Average Age' = AVERAGE ( 'Netflix Userbase'[Age] )
+			formatString: 0.0
+
+		measure 'Lifetime Revenue' = ```
+				SUMX (
+				    'Netflix Userbase',
+				    'Netflix Userbase'[Monthly Revenue]
+				        * ( DATEDIFF ( 'Netflix Userbase'[Join Date], 'Netflix Userbase'[Last Payment Date], MONTH ) + 1 )
+				)
+				```
+			formatString: \$#,0
+
+		measure 'Avg Tenure (Months)' = AVERAGEX ( 'Netflix Userbase', DATEDIFF ( 'Netflix Userbase'[Join Date], 'Netflix Userbase'[Last Payment Date], MONTH ) )
+			formatString: 0.00
+
+		measure 'Female Users' = CALCULATE ( [Total Users], Gender[Gender] = "Female" )
+			formatString: #,0
+
+		measure 'Male Users' = CALCULATE ( [Total Users], Gender[Gender] = "Male" )
+			formatString: #,0
+
+		measure 'Premium Users' = CALCULATE ( [Total Users], Subscription[Subscription Type] = "Premium" )
+			formatString: #,0
+
+		measure 'Revenue Share %' = DIVIDE ( [Total Monthly Revenue], CALCULATE ( [Total Monthly Revenue], ALL ( 'Netflix Userbase' ) ) )
+			formatString: 0.00%
+
+		measure 'User Share %' = DIVIDE ( [Total Users], CALCULATE ( [Total Users], ALL ( 'Netflix Userbase' ) ) )
+			formatString: 0.00%
+
+		partition 'Netflix Userbase' = m
+			mode: import
+			source = ```
+					let
+					    Source = Excel.Workbook(File.Contents("C:\Users\Anshrai\Documents\IIM Skills Power BI\Assignment 1 Data\Netflix Userbase.xlsx"), null, true),
+					    Sheet = Source{[Item="Netflix Userbase",Kind="Sheet"]}[Data],
+					    Promoted = Table.PromoteHeaders(Sheet, [PromoteAllScalars=true]),
+					    NoBlanks = Table.SelectRows(Promoted, each [User ID] <> null),
+					    Renamed = Table.RenameColumns(NoBlanks, {{"Device", "Device_ID"}}),
+					    Typed = Table.TransformColumnTypes(Renamed, {{"User ID", Int64.Type}, {"Subscription_ID", Int64.Type}, {"Monthly Revenue", Int64.Type}, {"Join Date", type date}, {"Last Payment Date", type date}, {"Country_ID", Int64.Type}, {"Age", Int64.Type}, {"Gender_ID", Int64.Type}, {"Device_ID", Int64.Type}})
+					in
+					    Typed
+					```
+
+	table Country
+
+		column Country
+			dataType: string
+			summarizeBy: none
+			sourceColumn: Country
+
+		column ID
+			dataType: int64
+			formatString: 0
+			summarizeBy: none
+			sourceColumn: ID
+
+		partition Country = m
+			mode: import
+			source = ```
+					let
+					    Source = Csv.Document(File.Contents("C:\Users\Anshrai\Documents\IIM Skills Power BI\Assignment 1 Data\Country.csv"), [Delimiter=",", Encoding=65001, QuoteStyle=QuoteStyle.None]),
+					    Promoted = Table.PromoteHeaders(Source, [PromoteAllScalars=true]),
+					    Typed = Table.TransformColumnTypes(Promoted, {{"Country", type text}, {"ID", Int64.Type}})
+					in
+					    Typed
+					```
+
+	table Gender
+
+		column Gender
+			dataType: string
+			summarizeBy: none
+			sourceColumn: Gender
+
+		column Gender_ID
+			dataType: int64
+			formatString: 0
+			summarizeBy: none
+			sourceColumn: Gender_ID
+
+		partition Gender = m
+			mode: import
+			source = ```
+					let
+					    Source = Csv.Document(File.Contents("C:\Users\Anshrai\Documents\IIM Skills Power BI\Assignment 1 Data\gender.csv"), [Delimiter=",", Encoding=65001, QuoteStyle=QuoteStyle.None]),
+					    Promoted = Table.PromoteHeaders(Source, [PromoteAllScalars=true]),
+					    Typed = Table.TransformColumnTypes(Promoted, {{"Gender", type text}, {"Gender_ID", Int64.Type}})
+					in
+					    Typed
+					```
+
+	table Device
+
+		column Device
+			dataType: string
+			summarizeBy: none
+			sourceColumn: Device
+
+		column Device_ID
+			dataType: int64
+			formatString: 0
+			summarizeBy: none
+			sourceColumn: Device_ID
+
+		partition Device = m
+			mode: import
+			source = ```
+					let
+					    Source = Excel.Workbook(File.Contents("C:\Users\Anshrai\Documents\IIM Skills Power BI\Assignment 1 Data\Device.xlsx"), null, true),
+					    Sheet = Source{[Item="Sheet1",Kind="Sheet"]}[Data],
+					    Kept = Table.SelectColumns(Sheet, {"Column1", "Column2"}),
+					    Promoted = Table.PromoteHeaders(Kept, [PromoteAllScalars=true]),
+					    NoBlanks = Table.SelectRows(Promoted, each [Device_ID] <> null),
+					    Typed = Table.TransformColumnTypes(NoBlanks, {{"Device", type text}, {"Device_ID", Int64.Type}})
+					in
+					    Typed
+					```
+
+	table Subscription
+
+		column 'Subscription Type'
+			dataType: string
+			summarizeBy: none
+			sourceColumn: Subscription Type
+
+		column Subscription_ID
+			dataType: int64
+			formatString: 0
+			summarizeBy: none
+			sourceColumn: Subscription_ID
+
+		partition Subscription = m
+			mode: import
+			source = ```
+					let
+					    Source = Excel.Workbook(File.Contents("C:\Users\Anshrai\Documents\IIM Skills Power BI\Assignment 1 Data\Subscription.xlsx"), null, true),
+					    Sheet = Source{[Item="Sheet1",Kind="Sheet"]}[Data],
+					    Promoted = Table.PromoteHeaders(Sheet, [PromoteAllScalars=true]),
+					    NoBlanks = Table.SelectRows(Promoted, each [Subscription_ID] <> null),
+					    Typed = Table.TransformColumnTypes(NoBlanks, {{"Subscription Type", type text}, {"Subscription_ID", Int64.Type}})
+					in
+					    Typed
+					```
+
+	table Date
+		dataCategory: Time
+
+		column Date
+			dataType: dateTime
+			isKey
+			formatString: dd-mm-yyyy
+			summarizeBy: none
+			isNameInferred
+			sourceColumn: [Date]
+
+		column Year
+			dataType: int64
+			formatString: 0
+			summarizeBy: none
+			isNameInferred
+			sourceColumn: [Year]
+
+		column 'Month No'
+			dataType: int64
+			formatString: 0
+			summarizeBy: none
+			isNameInferred
+			sourceColumn: [Month No]
+
+		column Month
+			dataType: string
+			summarizeBy: none
+			isNameInferred
+			sourceColumn: [Month]
+			sortByColumn: 'Month No'
+
+		column 'Year-Month'
+			dataType: string
+			summarizeBy: none
+			isNameInferred
+			sourceColumn: [Year-Month]
+
+		column Quarter
+			dataType: string
+			summarizeBy: none
+			isNameInferred
+			sourceColumn: [Quarter]
+
+		partition Date = calculated
+			mode: import
+			source = ```
+					ADDCOLUMNS (
+					    CALENDAR ( DATE ( 2021, 1, 1 ), DATE ( 2023, 12, 31 ) ),
+					    "Year", YEAR ( [Date] ),
+					    "Month No", MONTH ( [Date] ),
+					    "Month", FORMAT ( [Date], "MMM" ),
+					    "Year-Month", FORMAT ( [Date], "YYYY-MM" ),
+					    "Quarter", "Q" & QUARTER ( [Date] )
+					)
+					```
+
+	relationship rel_Country
+		fromColumn: 'Netflix Userbase'.Country_ID
+		toColumn: Country.ID
+
+	relationship rel_Gender
+		fromColumn: 'Netflix Userbase'.Gender_ID
+		toColumn: Gender.Gender_ID
+
+	relationship rel_Device
+		fromColumn: 'Netflix Userbase'.Device_ID
+		toColumn: Device.Device_ID
+
+	relationship rel_Subscription
+		fromColumn: 'Netflix Userbase'.Subscription_ID
+		toColumn: Subscription.Subscription_ID
+
+	relationship rel_Date
+		fromColumn: 'Netflix Userbase'.'Join Date'
+		toColumn: Date.Date
